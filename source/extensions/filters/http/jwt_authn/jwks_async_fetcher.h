@@ -5,7 +5,9 @@
 #include "envoy/extensions/filters/http/jwt_authn/v3/config.pb.h"
 #include "envoy/server/factory_context.h"
 
+#include "source/common/common/backoff_strategy.h"
 #include "source/common/common/logger.h"
+#include "source/common/common/random_generator.h"
 #include "source/common/init/target_impl.h"
 #include "source/extensions/filters/http/common/jwks_fetcher.h"
 #include "source/extensions/filters/http/jwt_authn/stats.h"
@@ -74,6 +76,16 @@ private:
 
   // Used in logs.
   const std::string debug_name_;
+
+  Envoy::BackOffStrategyPtr backoff_strategy_;
+
+  uint32_t num_retries_;
+
+  uint32_t retries_remaining_;
+
+  Envoy::Event::TimerPtr retry_timer_;
+
+  Envoy::Random::RandomGeneratorImpl random_;
 };
 
 using JwksAsyncFetcherPtr = std::unique_ptr<JwksAsyncFetcher>;

@@ -249,6 +249,8 @@ message RemoteJwks {
   // * Jwks is ready when the requests come, not need to wait for the Jwks fetching.
   //
   JwksAsyncFetch async_fetch = 3;
+
+  config.core.v4alpha.RetryPolicy retry_policy = 4;
 }
 
 // Fetch Jwks asynchronously in the main thread when the filter config is parsed.

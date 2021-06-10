@@ -64,6 +64,11 @@ public:
       expected_duration_ = JwksAsyncFetcher::getCacheDuration(config_);
     }
 
+    if (config_.has_retry_policy()) {
+      retry_timer_ = new NiceMock<Event::MockTimer>(&context_.dispatcher_);
+      num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(config_.retry_policy(), num_retries, 1);
+    }
+
     async_fetcher_ = std::make_unique<JwksAsyncFetcher>(
         config_, context_,
         [this](Upstream::ClusterManager&) {
@@ -91,6 +96,9 @@ public:
   NiceMock<Init::ExpectableWatcherImpl> init_watcher_;
   Event::MockTimer* timer_{};
   std::chrono::milliseconds expected_duration_;
+
+  Event::MockTimer* retry_timer_{};
+  uint32_t num_retries_{0u};
 };
 
 INSTANTIATE_TEST_SUITE_P(JwksAsyncFetcherTest, JwksAsyncFetcherTest,
@@ -239,6 +247,71 @@ TEST_P(JwksAsyncFetcherTest, TestNetworkFailureFetchAndRefresh) {
   EXPECT_EQ(out_jwks_array_.size(), 0);
   EXPECT_EQ(0U, stats_.jwks_fetch_success_.value());
   EXPECT_EQ(2U, stats_.jwks_fetch_failed_.value());
+}
+
+TEST_P(JwksAsyncFetcherTest, TestNetworkFailureFetchAndRetrySuccessfully) {
+  const char config[] = R"(
+      http_uri:
+        uri: https://pubkey_server/pubkey_path
+        cluster: pubkey_cluster
+
+      async_fetch: {}
+
+      retry_policy:
+        retry_back_off:
+          base_interval: 0.001s
+          max_interval: 0.1s
+        num_retries: 3
+)";
+
+  // Just start the Jwks fetch call
+  setupAsyncFetcher(config);
+
+  EXPECT_EQ(fetch_receiver_array_.size(), 1);
+  fetch_receiver_array_.back()->onJwksError(Common::JwksFetcher::JwksReceiver::Failure::Network);
+
+  for (uint32_t i = 1; i < num_retries_; ++i) {
+    fetch_receiver_array_.back()->onJwksError(Common::JwksFetcher::JwksReceiver::Failure::Network);
+  }
+
+  auto jwks = google::jwt_verify::Jwks::createFrom(PublicKey, google::jwt_verify::Jwks::JWKS);
+  fetch_receiver_array_.back()->onJwksSuccess(std::move(jwks));
+
+  // Output 1 jwks.
+  EXPECT_EQ(out_jwks_array_.size(), 1);
+  EXPECT_EQ(1U, stats_.jwks_fetch_success_.value());
+  EXPECT_EQ(num_retries_, stats_.jwks_fetch_failed_.value());
+}
+
+TEST_P(JwksAsyncFetcherTest, TestNetworkFailureFetchAndRetryWithoutSuccess) {
+  const char config[] = R"(
+      http_uri:
+        uri: https://pubkey_server/pubkey_path
+        cluster: pubkey_cluster
+
+      async_fetch: {}
+
+      retry_policy:
+        retry_back_off:
+          base_interval: 0.001s
+          max_interval: 0.1s
+        num_retries: 3
+)";
+
+  // Just start the Jwks fetch call
+  setupAsyncFetcher(config);
+
+  EXPECT_EQ(fetch_receiver_array_.size(), 1);
+  fetch_receiver_array_.back()->onJwksError(Common::JwksFetcher::JwksReceiver::Failure::Network);
+
+  for (uint32_t i = 0; i < num_retries_; ++i) {
+    fetch_receiver_array_.back()->onJwksError(Common::JwksFetcher::JwksReceiver::Failure::Network);
+  }
+
+  // Output 0 jwks.
+  EXPECT_EQ(out_jwks_array_.size(), 0);
+  EXPECT_EQ(0U, stats_.jwks_fetch_success_.value());
+  EXPECT_EQ(1U + num_retries_, stats_.jwks_fetch_failed_.value());
 }
 
 } // namespace

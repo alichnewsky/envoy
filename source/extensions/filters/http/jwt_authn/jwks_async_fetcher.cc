@@ -14,6 +14,11 @@ namespace {
 // Default cache expiration time in 5 minutes.
 constexpr int PubkeyCacheExpirationSec = 600;
 
+// Parameters of the jittered backoff strategy.
+static constexpr uint32_t RetryInitialDelayMilliseconds = 1000;
+static constexpr uint32_t RetryMaxDelayMilliseconds = 10 * 1000;
+static constexpr uint32_t RetryCount = 0;
+
 } // namespace
 
 JwksAsyncFetcher::JwksAsyncFetcher(const RemoteJwks& remote_jwks,
@@ -22,7 +27,34 @@ JwksAsyncFetcher::JwksAsyncFetcher(const RemoteJwks& remote_jwks,
                                    JwtAuthnFilterStats& stats, JwksDoneFetched done_fn)
     : remote_jwks_(remote_jwks), context_(context), create_fetcher_fn_(create_fetcher_fn),
       stats_(stats), done_fn_(done_fn), cache_duration_(getCacheDuration(remote_jwks)),
-      debug_name_(absl::StrCat("Jwks async fetching url=", remote_jwks_.http_uri().uri())) {
+      debug_name_(absl::StrCat("Jwks async fetching url=", remote_jwks_.http_uri().uri())),
+      num_retries_(RetryCount) {
+
+  uint64_t base_interval_ms = RetryInitialDelayMilliseconds;
+  uint64_t max_interval_ms = RetryMaxDelayMilliseconds;
+
+  if (remote_jwks_.has_retry_policy()) {
+    if (remote_jwks_.retry_policy().has_retry_back_off()) {
+      base_interval_ms =
+          PROTOBUF_GET_MS_REQUIRED(remote_jwks_.retry_policy().retry_back_off(), base_interval);
+
+      max_interval_ms = PROTOBUF_GET_MS_OR_DEFAULT(remote_jwks_.retry_policy().retry_back_off(),
+                                                   max_interval, base_interval_ms * 10);
+      if (max_interval_ms < base_interval_ms) {
+        throw EnvoyException("max_interval must be greater than or equal to the base_interval");
+      }
+    }
+
+    num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(remote_jwks_.retry_policy(), num_retries, 1);
+
+    retry_timer_ = context_.dispatcher().createTimer([this]() -> void { fetch(); });
+  }
+
+  backoff_strategy_ = std::make_unique<Envoy::JitteredExponentialBackOffStrategy>(
+      base_interval_ms, max_interval_ms, random_);
+
+  retries_remaining_ = num_retries_;
+
   // if async_fetch is not enabled, do nothing.
   if (!remote_jwks_.has_async_fetch()) {
     return;
@@ -64,6 +96,11 @@ void JwksAsyncFetcher::handleFetchDone() {
     init_target_.reset();
   }
 
+  if (backoff_strategy_) {
+    backoff_strategy_->reset();
+  }
+  retries_remaining_ = num_retries_;
+
   cache_duration_timer_->enableTimer(cache_duration_);
 }
 
@@ -87,6 +124,22 @@ void JwksAsyncFetcher::onJwksError(Failure) {
   stats_.jwks_fetch_failed_.inc();
 
   ENVOY_LOG(warn, "{}: failed", debug_name_);
+
+  // are all failure reasons a valid reason to retry fetching ?
+  if (backoff_strategy_) {
+    if (retries_remaining_-- > 0) {
+
+      auto retry_ms = std::chrono::milliseconds(backoff_strategy_->nextBackOffMs());
+
+      ENVOY_LOG(warn, "{}: retrying after {} milliseconds backoff", debug_name_, retry_ms.count());
+
+      retry_timer_->enableTimer(retry_ms);
+
+      return;
+    } else {
+      ENVOY_LOG(warn, "{}: not retrying {}", debug_name_, num_retries_ > 0 ? "anymore" : "at all");
+    }
+  }
   handleFetchDone();
 
   // Note: not to free fetcher_ in this function. Please see comment at onJwksSuccess.

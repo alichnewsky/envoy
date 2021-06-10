@@ -38,7 +38,9 @@ envoy_cc_library(
     deps = [
         ":stats_lib",
         "//envoy/server:factory_context_interface",
+        "//source/common/common:backoff_lib",
         "//source/common/common:minimal_logger_lib",
+        "//source/common/common:random_generator_lib",
         "//source/common/init:target_lib",
         "//source/common/protobuf:utility_lib",
         "//source/common/tracing:http_tracer_lib",
