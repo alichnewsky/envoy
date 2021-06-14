@@ -2,6 +2,7 @@
 
 #include "envoy/common/pure.h"
 #include "envoy/config/core/v3/http_uri.pb.h"
+#include "envoy/extensions/filters/http/jwt_authn/v3/config.pb.h"
 #include "envoy/upstream/cluster_manager.h"
 
 #include "jwt_verify_lib/jwks.h"
@@ -69,7 +70,9 @@ public:
    * @param cm the cluster manager to use during Jwks retrieval
    * @return a JwksFetcher instance
    */
-  static JwksFetcherPtr create(Upstream::ClusterManager& cm);
+  static JwksFetcherPtr
+  create(Upstream::ClusterManager& cm,
+         const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks);
 };
 } // namespace Common
 } // namespace HttpFilters

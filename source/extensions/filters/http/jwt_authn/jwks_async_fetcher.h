@@ -20,7 +20,8 @@ namespace JwtAuthn {
 /**
  *  CreateJwksFetcherCb is a callback interface for creating a JwksFetcher instance.
  */
-using CreateJwksFetcherCb = std::function<Common::JwksFetcherPtr(Upstream::ClusterManager&)>;
+using CreateJwksFetcherCb = std::function<Common::JwksFetcherPtr(
+    Upstream::ClusterManager&, const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks&)>;
 /**
  *  JwksDoneFetched is a callback interface to set a Jwks when fetch is done.
  */
@@ -76,16 +77,6 @@ private:
 
   // Used in logs.
   const std::string debug_name_;
-
-  Envoy::BackOffStrategyPtr backoff_strategy_;
-
-  uint32_t num_retries_;
-
-  uint32_t retries_remaining_;
-
-  Envoy::Event::TimerPtr retry_timer_;
-
-  Envoy::Random::RandomGeneratorImpl random_;
 };
 
 using JwksAsyncFetcherPtr = std::unique_ptr<JwksAsyncFetcher>;

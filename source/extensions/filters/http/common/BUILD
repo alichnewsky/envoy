@@ -36,8 +36,13 @@ envoy_cc_library(
     ],
     deps = [
         "//envoy/upstream:cluster_manager_interface",
+        "//source/common/common:backoff_lib",
+        "//source/common/common:minimal_logger_lib",
+        "//source/common/common:random_generator_lib",
         "//source/common/http:utility_lib",
+        "@com_google_absl//absl/time",
         "@envoy_api//envoy/config/core/v3:pkg_cc_proto",
+        "@envoy_api//envoy/extensions/filters/http/jwt_authn/v3:pkg_cc_proto",
     ],
 )
 

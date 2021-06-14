@@ -65,13 +65,12 @@ public:
     }
 
     if (config_.has_retry_policy()) {
-      retry_timer_ = new NiceMock<Event::MockTimer>(&context_.dispatcher_);
       num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(config_.retry_policy(), num_retries, 1);
     }
 
     async_fetcher_ = std::make_unique<JwksAsyncFetcher>(
         config_, context_,
-        [this](Upstream::ClusterManager&) {
+        [this](Upstream::ClusterManager&, const RemoteJwks&) {
           return std::make_unique<MockJwksFetcher>(
               [this](Common::JwksFetcher::JwksReceiver& receiver) {
                 fetch_receiver_array_.push_back(&receiver);
@@ -97,7 +96,6 @@ public:
   Event::MockTimer* timer_{};
   std::chrono::milliseconds expected_duration_;
 
-  Event::MockTimer* retry_timer_{};
   uint32_t num_retries_{0u};
 };
 

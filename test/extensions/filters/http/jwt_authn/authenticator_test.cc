@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 
 using envoy::extensions::filters::http::jwt_authn::v3::JwtAuthentication;
+using envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks;
 using Envoy::Extensions::HttpFilters::Common::JwksFetcher;
 using Envoy::Extensions::HttpFilters::Common::JwksFetcherPtr;
 using Envoy::Extensions::HttpFilters::Common::MockJwksFetcher;
@@ -47,7 +48,8 @@ public:
     fetcher_.reset(raw_fetcher_);
     auth_ = Authenticator::create(
         check_audience, provider, allow_failed, allow_missing, filter_config_->getJwksCache(),
-        filter_config_->cm(), [this](Upstream::ClusterManager&) { return std::move(fetcher_); },
+        filter_config_->cm(),
+        [this](Upstream::ClusterManager&, const RemoteJwks&) { return std::move(fetcher_); },
         filter_config_->timeSource());
     jwks_ = Jwks::createFrom(PublicKey, Jwks::JWKS);
     EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
