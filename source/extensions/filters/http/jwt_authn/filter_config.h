@@ -109,7 +109,7 @@ public:
                           const absl::optional<std::string>& provider, bool allow_failed,
                           bool allow_missing) const override {
     return Authenticator::create(check_audience, provider, allow_failed, allow_missing,
-                                 getJwksCache(), cm(), Common::JwksFetcher::create, dispatcher(), timeSource()); // FIXME remove timeSource() all over and uses the dispacher's
+                                 getJwksCache(), cm(), Common::JwksFetcher::create, dispatcher());
   }
 
 private:

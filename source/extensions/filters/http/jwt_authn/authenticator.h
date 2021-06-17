@@ -42,8 +42,7 @@ public:
                                  bool allow_missing, JwksCache& jwks_cache,
                                  Upstream::ClusterManager& cluster_manager,
                                  CreateJwksFetcherCb create_jwks_fetcher_cb,
-                                 Event::Dispatcher& dispatcher,
-                                 TimeSource& time_source);
+                                 Event::Dispatcher& dispatcher);
 };
 
 /**

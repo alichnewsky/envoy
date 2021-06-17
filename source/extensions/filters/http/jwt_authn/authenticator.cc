@@ -33,11 +33,11 @@ public:
                     const absl::optional<std::string>& provider, bool allow_failed,
                     bool allow_missing, JwksCache& jwks_cache,
                     Upstream::ClusterManager& cluster_manager,
-                    CreateJwksFetcherCb create_jwks_fetcher_cb, Event::Dispatcher& dispatcher, TimeSource& time_source)
+                    CreateJwksFetcherCb create_jwks_fetcher_cb, Event::Dispatcher& dispatcher)
       : jwks_cache_(jwks_cache), cm_(cluster_manager),
         create_jwks_fetcher_cb_(create_jwks_fetcher_cb), check_audience_(check_audience),
         provider_(provider), is_allow_failed_(allow_failed), is_allow_missing_(allow_missing),
-        dispatcher_(dispatcher), time_source_(time_source) {}
+        dispatcher_(dispatcher), time_source_(dispatcher_.timeSource()) {}
 
   // Following functions are for JwksFetcher::JwksReceiver interface
   void onJwksSuccess(google::jwt_verify::JwksPtr&& jwks) override;
@@ -303,11 +303,10 @@ AuthenticatorPtr Authenticator::create(const CheckAudience* check_audience,
                                        bool allow_failed, bool allow_missing, JwksCache& jwks_cache,
                                        Upstream::ClusterManager& cluster_manager,
                                        CreateJwksFetcherCb create_jwks_fetcher_cb,
-                                       Event::Dispatcher& dispatcher,
-                                       TimeSource& time_source) {
+                                       Event::Dispatcher& dispatcher) {
   return std::make_unique<AuthenticatorImpl>(check_audience, provider, allow_failed, allow_missing,
                                              jwks_cache, cluster_manager, create_jwks_fetcher_cb,
-                                             dispatcher, time_source);
+                                             dispatcher);
 }
 
 } // namespace JwtAuthn
