@@ -33,11 +33,11 @@ public:
                     const absl::optional<std::string>& provider, bool allow_failed,
                     bool allow_missing, JwksCache& jwks_cache,
                     Upstream::ClusterManager& cluster_manager,
-                    CreateJwksFetcherCb create_jwks_fetcher_cb, TimeSource& time_source)
+                    CreateJwksFetcherCb create_jwks_fetcher_cb, Event::Dispatcher& dispatcher, TimeSource& time_source)
       : jwks_cache_(jwks_cache), cm_(cluster_manager),
         create_jwks_fetcher_cb_(create_jwks_fetcher_cb), check_audience_(check_audience),
         provider_(provider), is_allow_failed_(allow_failed), is_allow_missing_(allow_missing),
-        time_source_(time_source) {}
+        dispatcher_(dispatcher), time_source_(time_source) {}
 
   // Following functions are for JwksFetcher::JwksReceiver interface
   void onJwksSuccess(google::jwt_verify::JwksPtr&& jwks) override;
@@ -97,6 +97,7 @@ private:
   const absl::optional<std::string> provider_;
   const bool is_allow_failed_;
   const bool is_allow_missing_;
+  Event::Dispatcher& dispatcher_;
   TimeSource& time_source_;
 };
 
@@ -210,7 +211,7 @@ void AuthenticatorImpl::startVerify() {
   // jwks fetching can be shared by two requests.
   if (jwks_data_->getJwtProvider().has_remote_jwks()) {
     if (!fetcher_) {
-      fetcher_ = create_jwks_fetcher_cb_(cm_, jwks_data_->getJwtProvider().remote_jwks());
+      fetcher_ = create_jwks_fetcher_cb_(cm_, jwks_data_->getJwtProvider().remote_jwks(), dispatcher_);
     }
     fetcher_->fetch(jwks_data_->getJwtProvider().remote_jwks().http_uri(), *parent_span_, *this);
     return;
@@ -302,10 +303,11 @@ AuthenticatorPtr Authenticator::create(const CheckAudience* check_audience,
                                        bool allow_failed, bool allow_missing, JwksCache& jwks_cache,
                                        Upstream::ClusterManager& cluster_manager,
                                        CreateJwksFetcherCb create_jwks_fetcher_cb,
+                                       Event::Dispatcher& dispatcher,
                                        TimeSource& time_source) {
   return std::make_unique<AuthenticatorImpl>(check_audience, provider, allow_failed, allow_missing,
                                              jwks_cache, cluster_manager, create_jwks_fetcher_cb,
-                                             time_source);
+                                             dispatcher, time_source);
 }
 
 } // namespace JwtAuthn

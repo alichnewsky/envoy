@@ -1,6 +1,7 @@
 #include "source/extensions/filters/http/common/jwks_fetcher.h"
 
 #include "envoy/config/core/v3/http_uri.pb.h"
+#include "envoy/event/dispatcher.h"
 
 #include "source/common/common/backoff_strategy.h"
 #include "source/common/common/enum_to_int.h"
@@ -29,9 +30,9 @@ class JwksFetcherImpl : public JwksFetcher,
                         public Logger::Loggable<Logger::Id::filter>,
                         public Http::AsyncClient::Callbacks {
 public:
-  JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks)
-      : cm_(cm), remote_jwks_(remote_jwks), num_retries_(RetryCount),
-        retries_remaining_(RetryCount) {
+  JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks, Event::Dispatcher& dispatcher)
+      : cm_(cm), remote_jwks_(remote_jwks), dispatcher_(dispatcher),
+        num_retries_(RetryCount), retries_remaining_(RetryCount) {
     ENVOY_LOG(trace, "{}", __func__);
 
     uint64_t base_interval_ms = RetryInitialDelayMilliseconds;
@@ -105,6 +106,9 @@ public:
     ENVOY_LOG(trace, "{}", __func__);
     complete_ = true;
     const uint64_t status_code = Http::Utility::getResponseStatus(response->headers());
+
+    JwksFetcher::JwksReceiver::Failure reason = JwksFetcher::JwksReceiver::Failure::Network;
+
     if (status_code == enumToInt(Http::Code::OK)) {
       ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: success", __func__, uri_->uri());
       if (response->body().length() != 0) {
@@ -118,18 +122,18 @@ public:
           return;
         } else {
           ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: invalid jwks", __func__, uri_->uri());
-          receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::InvalidJwks);
+          reason = JwksFetcher::JwksReceiver::Failure::InvalidJwks;
         }
       } else {
         ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: body is empty", __func__, uri_->uri());
-        receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::Network);
+        reason = JwksFetcher::JwksReceiver::Failure::Network;
       }
     } else {
       ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: response status code {}", __func__,
                 uri_->uri(), status_code);
-      receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::Network);
+      reason = JwksFetcher::JwksReceiver::Failure::Network;
     }
-    retryFetch();
+    retryFetch(reason);
   }
 
   void onFailure(const Http::AsyncClient::Request&,
@@ -137,8 +141,7 @@ public:
     ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: network error {}", __func__, uri_->uri(),
               enumToInt(reason));
     complete_ = true;
-    receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::Network);
-    retryFetch();
+    retryFetch(JwksFetcher::JwksReceiver::Failure::Network);
   }
 
   void onBeforeFinalizeUpstreamSpan(Tracing::Span&, const Http::ResponseHeaderMap*) override {}
@@ -154,6 +157,8 @@ private:
   Tracing::Span* parent_span_{};
 
   const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks_;
+
+  Envoy::Event::Dispatcher& dispatcher_;
 
   Envoy::BackOffStrategyPtr backoff_strategy_;
 
@@ -178,7 +183,7 @@ private:
     }
   }
 
-  void retryFetch() {
+  void retryFetch(JwksFetcher::JwksReceiver::Failure reason) {
 
     // cant' fetch() if receiver isn't null... ( for example after a reset() )
     auto* receiver = receiver_;
@@ -191,16 +196,17 @@ private:
 
         ENVOY_LOG(warn, "retrying after {} milliseconds backoff", retry_ms.count());
 
-        absl::SleepFor(absl::FromChrono(retry_ms));
-
-        fetch(*uri_, *parent_span_, *receiver);
+        auto backoff_timer = dispatcher_.createTimer([this, receiver](){ fetch(*uri_, *parent_span_, *receiver);});
+        backoff_timer->enableTimer( retry_ms );
 
       } else {
         ENVOY_LOG(warn, "not retrying anymore");
+        receiver->onJwksError(reason);
         reset();
       }
     } else {
       ENVOY_LOG(warn, "not retrying at all");
+      receiver->onJwksError(reason);
       reset();
     }
   }
@@ -209,8 +215,10 @@ private:
 
 JwksFetcherPtr JwksFetcher::create(
     Upstream::ClusterManager& cm,
-    const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks) {
-  return std::make_unique<JwksFetcherImpl>(cm, remote_jwks);
+    const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks,
+    Event::Dispatcher& dispatcher) {
+
+  return std::make_unique<JwksFetcherImpl>(cm, remote_jwks, dispatcher);
 }
 } // namespace Common
 } // namespace HttpFilters

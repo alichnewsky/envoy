@@ -70,7 +70,7 @@ public:
 
     async_fetcher_ = std::make_unique<JwksAsyncFetcher>(
         config_, context_,
-        [this](Upstream::ClusterManager&, const RemoteJwks&) {
+        [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher& ) {
           return std::make_unique<MockJwksFetcher>(
               [this](Common::JwksFetcher::JwksReceiver& receiver) {
                 fetch_receiver_array_.push_back(&receiver);

@@ -54,7 +54,7 @@ void JwksAsyncFetcher::fetch() {
   }
 
   ENVOY_LOG(debug, "{}: started", debug_name_);
-  fetcher_ = create_fetcher_fn_(context_.clusterManager(), remote_jwks_);
+  fetcher_ = create_fetcher_fn_(context_.clusterManager(), remote_jwks_, context_.dispatcher());
   fetcher_->fetch(remote_jwks_.http_uri(), Tracing::NullSpan::instance(), *this);
 }
 

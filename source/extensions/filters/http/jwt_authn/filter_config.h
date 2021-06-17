@@ -73,6 +73,7 @@ public:
   JwksCache& getJwksCache() const { return *jwks_cache_; }
 
   Upstream::ClusterManager& cm() const { return cm_; }
+  Event::Dispatcher& dispatcher() const { return dispatcher_; }
   TimeSource& timeSource() const { return time_source_; }
 
   // FilterConfig
@@ -108,7 +109,7 @@ public:
                           const absl::optional<std::string>& provider, bool allow_failed,
                           bool allow_missing) const override {
     return Authenticator::create(check_audience, provider, allow_failed, allow_missing,
-                                 getJwksCache(), cm(), Common::JwksFetcher::create, timeSource());
+                                 getJwksCache(), cm(), Common::JwksFetcher::create, dispatcher(), timeSource()); // FIXME remove timeSource() all over and uses the dispacher's
   }
 
 private:
@@ -142,6 +143,7 @@ private:
   absl::flat_hash_map<std::string, VerifierConstPtr> name_verifiers_;
   // all requirement_names for debug
   std::string all_requirement_names_;
+  Event::Dispatcher& dispatcher_;
   TimeSource& time_source_;
 };
 

@@ -49,7 +49,8 @@ public:
     auth_ = Authenticator::create(
         check_audience, provider, allow_failed, allow_missing, filter_config_->getJwksCache(),
         filter_config_->cm(),
-        [this](Upstream::ClusterManager&, const RemoteJwks&) { return std::move(fetcher_); },
+        [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher&) { return std::move(fetcher_); },
+        filter_config_->dispatcher(),
         filter_config_->timeSource());
     jwks_ = Jwks::createFrom(PublicKey, Jwks::JWKS);
     EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
