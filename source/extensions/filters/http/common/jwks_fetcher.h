@@ -2,7 +2,6 @@
 
 #include "envoy/common/pure.h"
 #include "envoy/config/core/v3/http_uri.pb.h"
-
 #include "envoy/extensions/filters/http/jwt_authn/v3/config.pb.h"
 #include "envoy/upstream/cluster_manager.h"
 

@@ -270,7 +270,7 @@ TEST_F(JwksFetcherTest, TestRetryOnceThenSucceed) {
         return &request;
       }));
 
-  EXPECT_CALL(receiver, onJwksSuccessImpl(testing::_)).Times(1);
+  EXPECT_CALL(receiver, onJwksSuccessImpl(testing::_));
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network))
       .Times(0); // only called if retries failed.
 
@@ -332,7 +332,7 @@ TEST_F(JwksFetcherTest, TestExhaustAllRetriesAndStillFail) {
           }));
 
   EXPECT_CALL(receiver, onJwksSuccessImpl(testing::_)).Times(0);
-  EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network)).Times(1);
+  EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network));
 
   // Act
   fetcher->fetch(parent_span_, receiver);
