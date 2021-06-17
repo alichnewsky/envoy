@@ -9,7 +9,6 @@
 #include "test/mocks/server/factory_context.h"
 #include "test/test_common/utility.h"
 
-using envoy::config::core::v3::HttpUri;
 using envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks;
 
 namespace Envoy {
