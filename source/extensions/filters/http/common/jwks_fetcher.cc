@@ -30,10 +30,9 @@ class JwksFetcherImpl : public JwksFetcher,
                         public Logger::Loggable<Logger::Id::filter>,
                         public Http::AsyncClient::Callbacks {
 public:
-  JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks, Event::Dispatcher& dispatcher)
-      : cm_(cm), remote_jwks_(remote_jwks),
-        uri_(remote_jwks.http_uri()),
-        dispatcher_(dispatcher),
+  JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks,
+                  Event::Dispatcher& dispatcher)
+      : cm_(cm), remote_jwks_(remote_jwks), uri_(remote_jwks.http_uri()), dispatcher_(dispatcher),
         num_retries_(RetryCount), retries_remaining_(RetryCount) {
     ENVOY_LOG(trace, "{}", __func__);
 
@@ -71,11 +70,9 @@ public:
     reset();
   }
 
-  void fetch(Tracing::Span& parent_span,
-             JwksFetcher::JwksReceiver& receiver) override {
+  void fetch(Tracing::Span& parent_span, JwksFetcher::JwksReceiver& receiver) override {
     ENVOY_LOG(trace, "{}", __func__);
     ASSERT(!receiver_);
-
 
     complete_ = false;
     receiver_ = &receiver;
@@ -131,8 +128,8 @@ public:
         reason = JwksFetcher::JwksReceiver::Failure::Network;
       }
     } else {
-      ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: response status code {}", __func__,
-                uri_.uri(), status_code);
+      ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: response status code {}", __func__, uri_.uri(),
+                status_code);
       reason = JwksFetcher::JwksReceiver::Failure::Network;
     }
     retryFetch(reason);
@@ -158,7 +155,7 @@ private:
   Tracing::Span* parent_span_{};
 
   const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks_;
-  const envoy::config::core::v3::HttpUri & uri_;
+  const envoy::config::core::v3::HttpUri& uri_;
 
   Envoy::Event::Dispatcher& dispatcher_;
 
@@ -197,8 +194,9 @@ private:
 
         ENVOY_LOG(warn, "retrying after {} milliseconds backoff", retry_ms.count());
 
-        auto backoff_timer = dispatcher_.createTimer([this, receiver](){ fetch( *parent_span_, *receiver);});
-        backoff_timer->enableTimer( retry_ms );
+        auto backoff_timer =
+            dispatcher_.createTimer([this, receiver]() { fetch(*parent_span_, *receiver); });
+        backoff_timer->enableTimer(retry_ms);
 
       } else {
         ENVOY_LOG(warn, "not retrying anymore");
@@ -214,10 +212,10 @@ private:
 };
 } // namespace
 
-JwksFetcherPtr JwksFetcher::create(
-    Upstream::ClusterManager& cm,
-    const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks,
-    Event::Dispatcher& dispatcher) {
+JwksFetcherPtr
+JwksFetcher::create(Upstream::ClusterManager& cm,
+                    const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks,
+                    Event::Dispatcher& dispatcher) {
 
   return std::make_unique<JwksFetcherImpl>(cm, remote_jwks, dispatcher);
 }

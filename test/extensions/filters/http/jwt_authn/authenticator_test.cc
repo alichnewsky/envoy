@@ -49,7 +49,9 @@ public:
     auth_ = Authenticator::create(
         check_audience, provider, allow_failed, allow_missing, filter_config_->getJwksCache(),
         filter_config_->cm(),
-        [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher&) { return std::move(fetcher_); },
+        [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher&) {
+          return std::move(fetcher_);
+        },
         filter_config_->dispatcher());
     jwks_ = Jwks::createFrom(PublicKey, Jwks::JWKS);
     EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
@@ -94,8 +96,7 @@ public:
 // It also verifies Jwks cache with 10 JWT authentications, but only one Jwks fetch.
 TEST_F(AuthenticatorTest, TestOkJWTandCache) {
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -120,8 +121,7 @@ TEST_F(AuthenticatorTest, TestForwardJwt) {
   (*proto_config_.mutable_providers())[std::string(ProviderName)].set_forward(true);
   createAuthenticator();
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -147,8 +147,7 @@ TEST_F(AuthenticatorTest, TestSetPayload) {
       "my_payload");
   createAuthenticator();
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -168,8 +167,7 @@ TEST_F(AuthenticatorTest, TestSetPayload) {
 // This test verifies the Jwt with non existing kid
 TEST_F(AuthenticatorTest, TestJwtWithNonExistKid) {
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -202,8 +200,7 @@ TEST_F(AuthenticatorTest, TestWrongIssuerOKWithProvider) {
   createAuthenticator();
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -224,8 +221,7 @@ TEST_F(AuthenticatorTest, TestWrongIssuerOKWithoutProvider) {
   createAuthenticator(nullptr, absl::nullopt);
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -242,8 +238,7 @@ TEST_F(AuthenticatorTest, TestJwtWithoutIssWithValidProvider) {
   EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -277,8 +272,7 @@ TEST_F(AuthenticatorTest, TestJwtWithoutIssWithValidProviderNotIssuer) {
   EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -300,8 +294,7 @@ TEST_F(AuthenticatorTest, TestJwtWithoutIssWithoutValidProviderNotIssuer) {
   EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -429,8 +422,7 @@ TEST_F(AuthenticatorTest, TestExpiredJWTWithABigClockSkew) {
   createAuthenticator();
 
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -484,8 +476,7 @@ TEST_F(AuthenticatorTest, TestIssuerNotFound) {
 // This test verifies that when Jwks fetching fails, JwksFetchFail status is returned.
 TEST_F(AuthenticatorTest, TestPubkeyFetchFail) {
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([](Tracing::Span&,
-                          JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksError(JwksFetcher::JwksReceiver::Failure::InvalidJwks);
       }));
 
@@ -523,8 +514,7 @@ TEST_F(AuthenticatorTest, TestNoForwardPayloadHeader) {
   provider0.clear_forward_payload_header();
   createAuthenticator();
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -548,8 +538,7 @@ TEST_F(AuthenticatorTest, TestAllowFailedMultipleTokens) {
 
   createAuthenticator(nullptr, absl::nullopt, /*allow_failed=*/true);
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -596,8 +585,7 @@ TEST_F(AuthenticatorTest, TestAllowFailedMultipleIssuers) {
   createAuthenticator(nullptr, absl::nullopt, /*allow_failed=*/true);
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
       .Times(2)
-      .WillRepeatedly(Invoke([](Tracing::Span&,
-                                JwksFetcher::JwksReceiver& receiver) {
+      .WillRepeatedly(Invoke([](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         ::google::jwt_verify::JwksPtr jwks = Jwks::createFrom(PublicKey, Jwks::JWKS);
         EXPECT_TRUE(jwks->getStatus() == Status::Ok);
         receiver.onJwksSuccess(std::move(jwks));
@@ -622,8 +610,7 @@ TEST_F(AuthenticatorTest, TestCustomCheckAudience) {
       std::vector<std::string>{"invalid_service"});
   createAuthenticator(check_audience.get());
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([this](Tracing::Span&,
-                              JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([this](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         receiver.onJwksSuccess(std::move(jwks_));
       }));
 
@@ -638,8 +625,7 @@ TEST_F(AuthenticatorTest, TestCustomCheckAudience) {
 // This test verifies that when invalid JWKS is fetched, an JWKS error status is returned.
 TEST_F(AuthenticatorTest, TestInvalidPubkeyKey) {
   EXPECT_CALL(*raw_fetcher_, fetch(_, _))
-      .WillOnce(Invoke([](Tracing::Span&,
-                          JwksFetcher::JwksReceiver& receiver) {
+      .WillOnce(Invoke([](Tracing::Span&, JwksFetcher::JwksReceiver& receiver) {
         auto jwks = Jwks::createFrom(PublicKey, Jwks::PEM);
         receiver.onJwksSuccess(std::move(jwks));
       }));

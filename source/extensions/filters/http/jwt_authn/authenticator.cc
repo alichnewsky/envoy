@@ -211,7 +211,8 @@ void AuthenticatorImpl::startVerify() {
   // jwks fetching can be shared by two requests.
   if (jwks_data_->getJwtProvider().has_remote_jwks()) {
     if (!fetcher_) {
-      fetcher_ = create_jwks_fetcher_cb_(cm_, jwks_data_->getJwtProvider().remote_jwks(), dispatcher_);
+      fetcher_ =
+          create_jwks_fetcher_cb_(cm_, jwks_data_->getJwtProvider().remote_jwks(), dispatcher_);
     }
     fetcher_->fetch(*parent_span_, *this);
     return;
