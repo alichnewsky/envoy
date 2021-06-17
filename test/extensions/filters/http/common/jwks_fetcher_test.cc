@@ -53,12 +53,10 @@ class JwksFetcherTest : public testing::Test {
 public:
   void setupFetcher(const std::string& config_str) {
     TestUtility::loadFromYaml(config_str, remote_jwks_);
-    uri_ = remote_jwks_.http_uri();
     mock_factory_ctx_.cluster_manager_.initializeThreadLocalClusters({"pubkey_cluster"});
   }
 
   RemoteJwks remote_jwks_;
-  HttpUri uri_;
   testing::NiceMock<Server::Configuration::MockFactoryContext> mock_factory_ctx_;
   NiceMock<Tracing::MockSpan> parent_span_;
 };
@@ -76,7 +74,7 @@ TEST_F(JwksFetcherTest, TestGetSuccess) {
   EXPECT_CALL(receiver, onJwksError(testing::_)).Times(0);
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 TEST_F(JwksFetcherTest, TestGet400) {
@@ -91,7 +89,7 @@ TEST_F(JwksFetcherTest, TestGet400) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network));
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 TEST_F(JwksFetcherTest, TestGetNoBody) {
@@ -106,7 +104,7 @@ TEST_F(JwksFetcherTest, TestGetNoBody) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network));
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 TEST_F(JwksFetcherTest, TestGetInvalidJwks) {
@@ -121,7 +119,7 @@ TEST_F(JwksFetcherTest, TestGetInvalidJwks) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::InvalidJwks));
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 TEST_F(JwksFetcherTest, TestHttpFailure) {
@@ -137,7 +135,7 @@ TEST_F(JwksFetcherTest, TestHttpFailure) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network));
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 TEST_F(JwksFetcherTest, TestCancel) {
@@ -155,7 +153,7 @@ TEST_F(JwksFetcherTest, TestCancel) {
   EXPECT_CALL(receiver, onJwksError(testing::_)).Times(0);
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
   // Proper cancel
   fetcher->cancel();
   // Re-entrant cancel
@@ -182,7 +180,7 @@ TEST_F(JwksFetcherTest, TestSpanPassedDown) {
           }));
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 }
 
 const std::string jwks_text = R"(
@@ -275,7 +273,7 @@ TEST_F(JwksFetcherTest, TestRetryOnceThenSucceed) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network)).Times(0); // only called if retries failed.
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 
   EXPECT_EQ(numSuccesses, 1);
   EXPECT_EQ(numFailures, 1);
@@ -332,7 +330,7 @@ TEST_F(JwksFetcherTest, TestExhaustAllRetriesAndStillFail) {
   EXPECT_CALL(receiver, onJwksError(JwksFetcher::JwksReceiver::Failure::Network)).Times(1);
 
   // Act
-  fetcher->fetch(uri_, parent_span_, receiver);
+  fetcher->fetch(parent_span_, receiver);
 
   EXPECT_EQ(numSuccesses, 0);
   EXPECT_EQ(numFailures, 4);

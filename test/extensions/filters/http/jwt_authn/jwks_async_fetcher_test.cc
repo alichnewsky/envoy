@@ -23,7 +23,7 @@ public:
   MockJwksFetcher(SaveJwksReceiverFn receiver_fn) : receiver_fn_(receiver_fn) {}
 
   void cancel() override {}
-  void fetch(const envoy::config::core::v3::HttpUri&, Tracing::Span&,
+  void fetch(Tracing::Span&,
              JwksReceiver& receiver) override {
     receiver_fn_(receiver);
   }

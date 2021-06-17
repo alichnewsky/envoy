@@ -54,16 +54,18 @@ public:
   virtual void cancel() PURE;
 
   /*
-   * Retrieve a JWKS resource from a remote HTTP host.
+   * Retrieve the JWKS resource from a remote HTTP host.
    * At most one outstanding request may be in-flight,
    * i.e. from the invocation of `fetch()` until either
    * a callback or `cancel()` is invoked, no
    * additional `fetch()` may be issued.
-   * @param uri the uri to retrieve the jwks from.
+   * the HTTP URI to be fetched is defined at construction time in the RemoteJwks definition
+   *
+   *
    * @param parent_span the active span to create children under
    * @param receiver the receiver of the fetched JWKS or error.
    */
-  virtual void fetch(const envoy::config::core::v3::HttpUri& uri, Tracing::Span& parent_span,
+  virtual void fetch(Tracing::Span& parent_span,
                      JwksReceiver& receiver) PURE;
 
   /*

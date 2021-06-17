@@ -213,7 +213,7 @@ void AuthenticatorImpl::startVerify() {
     if (!fetcher_) {
       fetcher_ = create_jwks_fetcher_cb_(cm_, jwks_data_->getJwtProvider().remote_jwks(), dispatcher_);
     }
-    fetcher_->fetch(jwks_data_->getJwtProvider().remote_jwks().http_uri(), *parent_span_, *this);
+    fetcher_->fetch(*parent_span_, *this);
     return;
   }
   // No valid keys for this issuer. This may happen as a result of incorrect local

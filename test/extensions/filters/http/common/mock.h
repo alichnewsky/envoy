@@ -18,7 +18,7 @@ class MockJwksFetcher : public JwksFetcher {
 public:
   MOCK_METHOD(void, cancel, ());
   MOCK_METHOD(void, fetch,
-              (const envoy::config::core::v3::HttpUri& uri, Tracing::Span& parent_span,
+              (Tracing::Span& parent_span,
                JwksReceiver& receiver));
 };
 
