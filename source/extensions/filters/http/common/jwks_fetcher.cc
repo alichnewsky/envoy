@@ -84,8 +84,7 @@ public:
       ENVOY_LOG(error, "{}: fetch pubkey [uri = {}] failed: [cluster = {}] is not configured",
                 __func__, uri_.uri(), uri_.cluster());
       complete_ = true;
-      receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::Network);
-      reset();
+      retryFetch(JwksFetcher::JwksReceiver::Failure::Network);
       return;
     }
 
@@ -106,8 +105,6 @@ public:
     complete_ = true;
     const uint64_t status_code = Http::Utility::getResponseStatus(response->headers());
 
-    JwksFetcher::JwksReceiver::Failure reason = JwksFetcher::JwksReceiver::Failure::Network;
-
     if (status_code == enumToInt(Http::Code::OK)) {
       ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: success", __func__, uri_.uri());
       if (response->body().length() != 0) {
@@ -121,18 +118,18 @@ public:
           return;
         } else {
           ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: invalid jwks", __func__, uri_.uri());
-          reason = JwksFetcher::JwksReceiver::Failure::InvalidJwks;
+          receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::InvalidJwks);
+          reset();
         }
       } else {
         ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: body is empty", __func__, uri_.uri());
-        reason = JwksFetcher::JwksReceiver::Failure::Network;
+        retryFetch(JwksFetcher::JwksReceiver::Failure::Network);
       }
     } else {
       ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: response status code {}", __func__, uri_.uri(),
                 status_code);
-      reason = JwksFetcher::JwksReceiver::Failure::Network;
+      retryFetch(JwksFetcher::JwksReceiver::Failure::Network);
     }
-    retryFetch(reason);
   }
 
   void onFailure(const Http::AsyncClient::Request&,
