@@ -53,13 +53,11 @@ public:
   virtual void cancel() PURE;
 
   /*
-   * Retrieve the JWKS resource from a remote HTTP host.
+   * Retrieve a JWKS resource from a remote HTTP host.
    * At most one outstanding request may be in-flight,
    * i.e. from the invocation of `fetch()` until either
    * a callback or `cancel()` is invoked, no
    * additional `fetch()` may be issued.
-   * the HTTP URI to be fetched is defined at construction time in the RemoteJwks definition
-   *
    *
    * @param parent_span the active span to create children under
    * @param receiver the receiver of the fetched JWKS or error.
@@ -69,6 +67,9 @@ public:
   /*
    * Factory method for creating a JwksFetcher.
    * @param cm the cluster manager to use during Jwks retrieval
+   * @param remote_jwks the definition of the remote Jwks source
+   * @param dispatcher used for creating timers to apply the retry policy if defined in remote_jwks
+   *
    * @return a JwksFetcher instance
    */
   static JwksFetcherPtr
