@@ -32,30 +32,32 @@ class JwksFetcherImpl : public JwksFetcher,
 public:
   JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks,
                   Event::Dispatcher& dispatcher)
-      : cm_(cm), remote_jwks_(remote_jwks), uri_(remote_jwks.http_uri()), dispatcher_(dispatcher),
-        num_retries_(RetryCount), retries_remaining_(RetryCount) {
+      : cm_(cm), uri_(remote_jwks.http_uri()), dispatcher_(dispatcher), num_retries_(RetryCount),
+        retries_remaining_(RetryCount) {
     ENVOY_LOG(trace, "{}", __func__);
 
     uint64_t base_interval_ms = RetryInitialDelayMilliseconds;
     uint64_t max_interval_ms = RetryMaxDelayMilliseconds;
 
-    if (remote_jwks_.has_retry_policy()) {
-      if (remote_jwks_.retry_policy().has_retry_back_off()) {
+    if (remote_jwks.has_retry_policy()) {
+      if (remote_jwks.retry_policy().has_retry_back_off()) {
         base_interval_ms =
-            PROTOBUF_GET_MS_REQUIRED(remote_jwks_.retry_policy().retry_back_off(), base_interval);
+            PROTOBUF_GET_MS_REQUIRED(remote_jwks.retry_policy().retry_back_off(), base_interval);
 
-        max_interval_ms = PROTOBUF_GET_MS_OR_DEFAULT(remote_jwks_.retry_policy().retry_back_off(),
+        max_interval_ms = PROTOBUF_GET_MS_OR_DEFAULT(remote_jwks.retry_policy().retry_back_off(),
                                                      max_interval, base_interval_ms * 10);
         if (max_interval_ms < base_interval_ms) {
           throw EnvoyException("max_interval must be greater than or equal to the base_interval");
         }
       }
 
-      num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(remote_jwks_.retry_policy(), num_retries, 1);
+      num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(remote_jwks.retry_policy(), num_retries, 1);
     }
 
     backoff_strategy_ = std::make_unique<Envoy::JitteredExponentialBackOffStrategy>(
         base_interval_ms, max_interval_ms, random_);
+
+    backoff_timer_ = dispatcher_.createTimer([this]() { fetchInternal(); });
 
     retries_remaining_ = num_retries_;
   }
@@ -65,7 +67,7 @@ public:
   void cancel() final {
     if (request_ && !complete_) {
       request_->cancel();
-      ENVOY_LOG(debug, "fetch pubkey [uri = {}]: canceled", remote_jwks_.http_uri().uri());
+      ENVOY_LOG(debug, "fetch pubkey [uri = {}]: canceled", uri_.uri());
     }
     reset();
   }
@@ -78,25 +80,7 @@ public:
     receiver_ = &receiver;
     parent_span_ = &parent_span;
 
-    // Check if cluster is configured, fail the request if not.
-    const auto thread_local_cluster = cm_.getThreadLocalCluster(uri_.cluster());
-    if (thread_local_cluster == nullptr) {
-      ENVOY_LOG(error, "{}: fetch pubkey [uri = {}] failed: [cluster = {}] is not configured",
-                __func__, uri_.uri(), uri_.cluster());
-      complete_ = true;
-      retryFetch(JwksFetcher::JwksReceiver::Failure::Network);
-      return;
-    }
-
-    Http::RequestMessagePtr message = Http::Utility::prepareHeaders(uri_);
-    message->headers().setReferenceMethod(Http::Headers::get().MethodValues.Get);
-    ENVOY_LOG(debug, "fetch pubkey from [uri = {}]: start", uri_.uri());
-    auto options = Http::AsyncClient::RequestOptions()
-                       .setTimeout(std::chrono::milliseconds(
-                           DurationUtil::durationToMilliseconds(uri_.timeout())))
-                       .setParentSpan(parent_span)
-                       .setChildSpanName("JWT Remote PubKey Fetch");
-    request_ = thread_local_cluster->httpAsyncClient().send(std::move(message), *this, options);
+    fetchInternal();
   }
 
   // HTTP async receive methods
@@ -120,6 +104,7 @@ public:
           ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: invalid jwks", __func__, uri_.uri());
           receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::InvalidJwks);
           reset();
+          return;
         }
       } else {
         ENVOY_LOG(debug, "{}: fetch pubkey [uri = {}]: body is empty", __func__, uri_.uri());
@@ -143,27 +128,6 @@ public:
   void onBeforeFinalizeUpstreamSpan(Tracing::Span&, const Http::ResponseHeaderMap*) override {}
 
 private:
-  Upstream::ClusterManager& cm_;
-  bool complete_{};
-  JwksFetcher::JwksReceiver* receiver_{};
-
-  Http::AsyncClient::Request* request_{};
-
-  Tracing::Span* parent_span_{};
-
-  const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks& remote_jwks_;
-  const envoy::config::core::v3::HttpUri& uri_;
-
-  Envoy::Event::Dispatcher& dispatcher_;
-
-  Envoy::BackOffStrategyPtr backoff_strategy_;
-
-  uint32_t num_retries_;
-
-  uint32_t retries_remaining_;
-
-  Envoy::Random::RandomGeneratorImpl random_;
-
   void reset() {
     request_ = nullptr;
     receiver_ = nullptr;
@@ -172,40 +136,65 @@ private:
     // truncated backoff back to 0 retries attempted.
     retries_remaining_ = num_retries_;
 
-    if (backoff_strategy_) {
-      // backoff strategy : back to initial (small) delay
-      backoff_strategy_->reset();
+    // backoff strategy : back to initial (small) delay
+    backoff_strategy_->reset();
+  }
+
+  void fetchInternal() {
+    ENVOY_LOG(trace, "{}", __func__);
+
+    // these two pointers have been set in the last explicit call to fetch() or reset()
+    ASSERT(receiver_ != nullptr);
+    ASSERT(parent_span_ != nullptr);
+
+    // Check if cluster is configured, fail the request if not.
+    const auto thread_local_cluster = cm_.getThreadLocalCluster(uri_.cluster());
+    if (thread_local_cluster == nullptr) {
+      ENVOY_LOG(error, "{}: fetch pubkey [uri = {}] failed: [cluster = {}] is not configured",
+                __func__, uri_.uri(), uri_.cluster());
+      complete_ = true;
+      receiver_->onJwksError(JwksFetcher::JwksReceiver::Failure::Network);
+      reset();
+      return;
     }
+
+    Http::RequestMessagePtr message = Http::Utility::prepareHeaders(uri_);
+    message->headers().setReferenceMethod(Http::Headers::get().MethodValues.Get);
+    ENVOY_LOG(debug, "fetch pubkey from [uri = {}]: start", uri_.uri());
+    auto options = Http::AsyncClient::RequestOptions()
+                       .setTimeout(std::chrono::milliseconds(
+                           DurationUtil::durationToMilliseconds(uri_.timeout())))
+                       .setParentSpan(*parent_span_)
+                       .setChildSpanName("JWT Remote PubKey Fetch");
+    request_ = thread_local_cluster->httpAsyncClient().send(std::move(message), *this, options);
   }
 
   void retryFetch(JwksFetcher::JwksReceiver::Failure reason) {
-
-    // cant' fetch() if receiver isn't null... ( for example after a reset() )
-    auto* receiver = receiver_;
-    receiver_ = nullptr;
-
-    if (backoff_strategy_) {
-      if (retries_remaining_-- > 0) {
-
-        auto retry_ms = std::chrono::milliseconds(backoff_strategy_->nextBackOffMs());
-
-        ENVOY_LOG(warn, "retrying after {} milliseconds backoff", retry_ms.count());
-
-        auto backoff_timer =
-            dispatcher_.createTimer([this, receiver]() { fetch(*parent_span_, *receiver); });
-        backoff_timer->enableTimer(retry_ms);
-
-      } else {
-        ENVOY_LOG(warn, "not retrying anymore");
-        receiver->onJwksError(reason);
-        reset();
-      }
+    if (retries_remaining_-- > 0) {
+      auto retry_ms = std::chrono::milliseconds(backoff_strategy_->nextBackOffMs());
+      ENVOY_LOG(info, "retrying after {} milliseconds backoff", retry_ms.count());
+      backoff_timer_->enableTimer(retry_ms);
     } else {
-      ENVOY_LOG(warn, "not retrying at all");
-      receiver->onJwksError(reason);
+      ENVOY_LOG(warn, "not retrying anymore");
+      receiver_->onJwksError(reason);
       reset();
     }
   }
+
+  Upstream::ClusterManager& cm_;
+  const envoy::config::core::v3::HttpUri& uri_;
+  Envoy::Event::Dispatcher& dispatcher_;
+
+  Envoy::Event::TimerPtr backoff_timer_{};
+  Envoy::BackOffStrategyPtr backoff_strategy_;
+  uint32_t num_retries_;
+  Envoy::Random::RandomGeneratorImpl random_;
+
+  uint32_t retries_remaining_;
+  bool complete_{};
+  JwksFetcher::JwksReceiver* receiver_{};
+  Http::AsyncClient::Request* request_{};
+  Tracing::Span* parent_span_{};
 };
 } // namespace
 

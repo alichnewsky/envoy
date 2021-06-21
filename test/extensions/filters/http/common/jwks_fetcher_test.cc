@@ -227,9 +227,6 @@ TEST_F(JwksFetcherTest, TestRetryOnceThenSucceed) {
   Event::MockTimer* retry_timer;
   Event::TimerCb retry_timer_cb;
 
-  std::unique_ptr<JwksFetcher> fetcher(
-      JwksFetcher::create(mock_factory_ctx_.cluster_manager_, remote_jwks_, dispatcher));
-
   EXPECT_CALL(dispatcher, createTimer_(_))
       .WillRepeatedly(Invoke([&retry_timer, &retry_timer_cb](Event::TimerCb timer_cb) {
         retry_timer = new Event::MockTimer();
@@ -239,6 +236,9 @@ TEST_F(JwksFetcherTest, TestRetryOnceThenSucceed) {
         }));
         return retry_timer;
       }));
+
+  std::unique_ptr<JwksFetcher> fetcher(
+      JwksFetcher::create(mock_factory_ctx_.cluster_manager_, remote_jwks_, dispatcher));
 
   Http::MockAsyncClientRequest request(
       &(mock_factory_ctx_.cluster_manager_.thread_local_cluster_.async_client_));
@@ -300,9 +300,6 @@ TEST_F(JwksFetcherTest, TestExhaustAllRetriesAndStillFail) {
   Event::MockTimer* retry_timer;
   Event::TimerCb retry_timer_cb;
 
-  std::unique_ptr<JwksFetcher> fetcher(
-      JwksFetcher::create(mock_factory_ctx_.cluster_manager_, remote_jwks_, dispatcher));
-
   EXPECT_CALL(dispatcher, createTimer_(_))
       .WillRepeatedly(Invoke([&retry_timer, &retry_timer_cb](Event::TimerCb timer_cb) {
         retry_timer = new Event::MockTimer();
@@ -312,6 +309,9 @@ TEST_F(JwksFetcherTest, TestExhaustAllRetriesAndStillFail) {
         }));
         return retry_timer;
       }));
+
+  std::unique_ptr<JwksFetcher> fetcher(
+      JwksFetcher::create(mock_factory_ctx_.cluster_manager_, remote_jwks_, dispatcher));
 
   Http::MockAsyncClientRequest request(
       &(mock_factory_ctx_.cluster_manager_.thread_local_cluster_.async_client_));

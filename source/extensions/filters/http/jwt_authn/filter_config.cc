@@ -15,8 +15,7 @@ FilterConfigImpl::FilterConfigImpl(
     envoy::extensions::filters::http::jwt_authn::v3::JwtAuthentication proto_config,
     const std::string& stats_prefix, Server::Configuration::FactoryContext& context)
     : proto_config_(std::move(proto_config)), stats_(generateStats(stats_prefix, context.scope())),
-      cm_(context.clusterManager()), dispatcher_(context.dispatcher()),
-      time_source_(context.dispatcher().timeSource()) {
+      cm_(context.clusterManager()), dispatcher_(context.dispatcher()) {
 
   ENVOY_LOG(debug, "Loaded JwtAuthConfig: {}", proto_config_.DebugString());
 

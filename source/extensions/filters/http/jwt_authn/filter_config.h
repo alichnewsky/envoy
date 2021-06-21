@@ -74,7 +74,7 @@ public:
 
   Upstream::ClusterManager& cm() const { return cm_; }
   Event::Dispatcher& dispatcher() const { return dispatcher_; }
-  TimeSource& timeSource() const { return time_source_; }
+  TimeSource& timeSource() const { return dispatcher_.timeSource(); }
 
   // FilterConfig
 
@@ -144,7 +144,6 @@ private:
   // all requirement_names for debug
   std::string all_requirement_names_;
   Event::Dispatcher& dispatcher_;
-  TimeSource& time_source_;
 };
 
 } // namespace JwtAuthn
