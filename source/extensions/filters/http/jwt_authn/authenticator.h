@@ -55,7 +55,7 @@ public:
   // Factory method for creating authenticator, and populate it with provider config.
   virtual AuthenticatorPtr create(const ::google::jwt_verify::CheckAudience* check_audience,
                                   const absl::optional<std::string>& provider, bool allow_failed,
-                                  bool allow_missing) const PURE;
+                                  bool allow_missing, Event::Dispatcher& dispatcher) const PURE;
 };
 
 } // namespace JwtAuthn

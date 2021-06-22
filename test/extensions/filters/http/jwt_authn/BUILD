@@ -165,6 +165,7 @@ envoy_extension_cc_test(
         ":mock_lib",
         ":test_common_lib",
         "//source/extensions/filters/http/jwt_authn:verifier_lib",
+        "//test/mocks/server:factory_context_mocks",
         "//test/test_common:utility_lib",
         "@envoy_api//envoy/extensions/filters/http/jwt_authn/v3:pkg_cc_proto",
     ],

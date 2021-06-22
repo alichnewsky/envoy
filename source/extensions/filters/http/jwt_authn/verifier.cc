@@ -32,14 +32,17 @@ struct CompletionState {
 class ContextImpl : public Verifier::Context {
 public:
   ContextImpl(Http::RequestHeaderMap& headers, Tracing::Span& parent_span,
-              Verifier::Callbacks* callback)
-      : headers_(headers), parent_span_(parent_span), callback_(callback) {}
+              Verifier::Callbacks* callback, Event::Dispatcher& dispatcher)
+      : headers_(headers), parent_span_(parent_span), callback_(callback), dispatcher_(dispatcher) {
+  }
 
   Http::RequestHeaderMap& headers() const override { return headers_; }
 
   Tracing::Span& parentSpan() const override { return parent_span_; }
 
   Verifier::Callbacks* callback() const override { return callback_; }
+
+  Event::Dispatcher& dispatcher() const { return dispatcher_; }
 
   void cancel() override {
     for (const auto& it : auths_) {
@@ -73,6 +76,7 @@ private:
   absl::node_hash_map<const Verifier*, CompletionState> completion_states_;
   std::vector<AuthenticatorPtr> auths_;
   ProtobufWkt::Struct payload_;
+  Event::Dispatcher& dispatcher_;
 };
 
 // base verifier for provider_name, provider_and_audiences, and allow_missing_or_failed.
@@ -119,7 +123,9 @@ public:
 
   void verify(ContextSharedPtr context) const override {
     auto& ctximpl = static_cast<ContextImpl&>(*context);
-    auto auth = auth_factory_.create(getAudienceChecker(), provider_name_, false, false);
+
+    auto auth = auth_factory_.create(getAudienceChecker(), provider_name_, false, false,
+                                     ctximpl.dispatcher());
     extractor_->sanitizePayloadHeaders(ctximpl.headers());
     auth->verify(
         ctximpl.headers(), ctximpl.parentSpan(), extractor_->extract(ctximpl.headers()),
@@ -170,7 +176,7 @@ public:
 
   void verify(ContextSharedPtr context) const override {
     auto& ctximpl = static_cast<ContextImpl&>(*context);
-    auto auth = auth_factory_.create(nullptr, absl::nullopt, true, true);
+    auto auth = auth_factory_.create(nullptr, absl::nullopt, true, true, ctximpl.dispatcher());
     extractor_->sanitizePayloadHeaders(ctximpl.headers());
     auth->verify(
         ctximpl.headers(), ctximpl.parentSpan(), extractor_->extract(ctximpl.headers()),
@@ -205,7 +211,7 @@ public:
 
     auto& ctximpl = static_cast<ContextImpl&>(*context);
     auto auth = auth_factory_.create(nullptr, absl::nullopt, false /* allow failed */,
-                                     true /* allow missing */);
+                                     true /* allow missing */, ctximpl.dispatcher());
     extractor_->sanitizePayloadHeaders(ctximpl.headers());
     auth->verify(
         ctximpl.headers(), ctximpl.parentSpan(), extractor_->extract(ctximpl.headers()),
@@ -421,8 +427,9 @@ VerifierConstPtr innerCreate(const JwtRequirement& requirement,
 } // namespace
 
 ContextSharedPtr Verifier::createContext(Http::RequestHeaderMap& headers,
-                                         Tracing::Span& parent_span, Callbacks* callback) {
-  return std::make_shared<ContextImpl>(headers, parent_span, callback);
+                                         Tracing::Span& parent_span, Callbacks* callback,
+                                         Event::Dispatcher& dispatcher) {
+  return std::make_shared<ContextImpl>(headers, parent_span, callback, dispatcher);
 }
 
 VerifierConstPtr Verifier::create(const JwtRequirement& requirement,

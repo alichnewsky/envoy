@@ -73,8 +73,6 @@ public:
   JwksCache& getJwksCache() const { return *jwks_cache_; }
 
   Upstream::ClusterManager& cm() const { return cm_; }
-  Event::Dispatcher& dispatcher() const { return dispatcher_; }
-  TimeSource& timeSource() const { return dispatcher_.timeSource(); }
 
   // FilterConfig
 
@@ -107,9 +105,10 @@ public:
   // methods for AuthFactory interface. Factory method to help create authenticators.
   AuthenticatorPtr create(const ::google::jwt_verify::CheckAudience* check_audience,
                           const absl::optional<std::string>& provider, bool allow_failed,
-                          bool allow_missing) const override {
+                          bool allow_missing, Event::Dispatcher& dispatcher) const override {
+
     return Authenticator::create(check_audience, provider, allow_failed, allow_missing,
-                                 getJwksCache(), cm(), Common::JwksFetcher::create, dispatcher());
+                                 getJwksCache(), cm(), Common::JwksFetcher::create, dispatcher);
   }
 
 private:
@@ -143,7 +142,6 @@ private:
   absl::flat_hash_map<std::string, VerifierConstPtr> name_verifiers_;
   // all requirement_names for debug
   std::string all_requirement_names_;
-  Event::Dispatcher& dispatcher_;
 };
 
 } // namespace JwtAuthn

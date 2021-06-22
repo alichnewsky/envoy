@@ -4,6 +4,7 @@
 
 #include "test/extensions/filters/http/jwt_authn/mock.h"
 #include "test/extensions/filters/http/jwt_authn/test_common.h"
+#include "test/mocks/server/factory_context.h"
 #include "test/test_common/utility.h"
 
 #include "gmock/gmock.h"
@@ -70,14 +71,21 @@ constexpr auto allowfailed = "_allow_failed_";
 class GroupVerifierTest : public testing::Test {
 public:
   void createVerifier() {
-    ON_CALL(mock_factory_, create(_, _, _, _))
+    ON_CALL(mock_factory_, create(_, _, _, _, _))
         .WillByDefault(Invoke([&](const ::google::jwt_verify::CheckAudience*,
-                                  const absl::optional<std::string>& provider, bool, bool) {
+                                  const absl::optional<std::string>& provider, bool, bool,
+                                  Event::Dispatcher&) {
           return std::move(mock_auths_[provider ? provider.value() : allowfailed]);
         }));
     verifier_ = Verifier::create(proto_config_.rules(0).requires(), proto_config_.providers(),
                                  mock_factory_);
   }
+
+  void createContext(Http::RequestHeaderMap& headers) {
+    context_ =
+        Verifier::createContext(headers, parent_span_, &mock_cb_, mock_factory_ctx_.dispatcher());
+  }
+
   void createSyncMockAuthsAndVerifier(const StatusMap& statuses) {
     for (const auto& it : statuses) {
       auto mock_auth = std::make_unique<MockAuthenticator>();
@@ -129,6 +137,7 @@ public:
   MockVerifierCallbacks mock_cb_;
   absl::node_hash_map<std::string, std::unique_ptr<MockAuthenticator>> mock_auths_;
   NiceMock<MockAuthFactory> mock_factory_;
+  NiceMock<Server::Configuration::MockFactoryContext> mock_factory_ctx_;
   ContextSharedPtr context_;
   NiceMock<Tracing::MockSpan> parent_span_;
   absl::node_hash_map<std::string, AuthenticatorCallback> callbacks_;
@@ -175,7 +184,7 @@ rules:
   auto headers = Http::TestRequestHeaderMapImpl{
       {"sec-istio-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("sec-istio-auth-userinfo"));
 }
@@ -210,7 +219,7 @@ rules:
 
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
 }
 
@@ -230,7 +239,7 @@ TEST_F(GroupVerifierTest, TestRequiresAll) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -248,7 +257,7 @@ TEST_F(GroupVerifierTest, TestRequiresAllBadFormat) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["example_provider"](Status::JwtBadFormat);
   // can keep invoking callback
@@ -271,7 +280,7 @@ TEST_F(GroupVerifierTest, TestRequiresAllMissing) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["example_provider"](Status::Ok);
   callbacks_["other_provider"](Status::JwtMissed);
@@ -294,7 +303,7 @@ TEST_F(GroupVerifierTest, TestRequiresAllBothFailed) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -316,7 +325,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyFirstAuthOK) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_TRUE(headers.has("other-auth-userinfo"));
@@ -337,7 +346,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyLastAuthOk) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -358,7 +367,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyAllAuthFailed) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -382,7 +391,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyLastIsJwtMissed) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -403,7 +412,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyLastIsJwtUnknownIssuer) {
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -421,7 +430,7 @@ TEST_F(GroupVerifierTest, TestAnyInAllFirstAnyIsOk) {
 
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
 }
 
@@ -439,7 +448,7 @@ TEST_F(GroupVerifierTest, TestAnyInAllLastAnyIsOk) {
 
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
 }
 
@@ -454,7 +463,7 @@ TEST_F(GroupVerifierTest, TestAnyInAllBothInRequireAnyIsOk) {
   EXPECT_CALL(mock_cb_, setPayload(_)).Times(0);
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["provider_1"](Status::Ok);
   callbacks_["provider_2"](Status::Ok);
@@ -471,7 +480,7 @@ TEST_F(GroupVerifierTest, TestAnyInAllBothInRequireAnyFailed) {
   EXPECT_CALL(mock_cb_, setPayload(_)).Times(0);
   EXPECT_CALL(mock_cb_, onComplete(Status::JwksFetchFail));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["provider_1"](Status::JwksFetchFail);
   callbacks_["provider_2"](Status::JwksFetchFail);
@@ -489,7 +498,7 @@ TEST_F(GroupVerifierTest, TestAllInAnyBothRequireAllFailed) {
   EXPECT_CALL(mock_cb_, setPayload(_)).Times(0);
   EXPECT_CALL(mock_cb_, onComplete(Status::JwtExpired));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
 }
 
@@ -504,7 +513,7 @@ TEST_F(GroupVerifierTest, TestAllInAnyFirstAllIsOk) {
   EXPECT_CALL(mock_cb_, setPayload(_)).Times(0);
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["provider_2"](Status::Ok);
   callbacks_["provider_3"](Status::JwtMissed);
@@ -520,7 +529,7 @@ TEST_F(GroupVerifierTest, TestAllInAnyLastAllIsOk) {
 
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["provider_3"](Status::Ok);
   callbacks_["provider_4"](Status::Ok);
@@ -536,7 +545,7 @@ TEST_F(GroupVerifierTest, TestAllInAnyBothRequireAllAreOk) {
 
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["provider_1"](Status::Ok);
   callbacks_["provider_2"](Status::Ok);
@@ -557,7 +566,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyWithAllowFailed) {
   EXPECT_CALL(mock_cb_, onComplete(Status::Ok));
 
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["example_provider"](Status::JwtMissed);
   callbacks_["other_provider"](Status::JwtExpired);
@@ -576,7 +585,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyWithAllowMissingButFailed) {
   EXPECT_CALL(mock_cb_, onComplete(Status::JwtExpired));
 
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["example_provider"](Status::JwtMissed);
   callbacks_["other_provider"](Status::JwtExpired);
@@ -595,7 +604,7 @@ TEST_F(GroupVerifierTest, TestRequiresAnyWithAllowMissingButUnknownIssuer) {
   EXPECT_CALL(mock_cb_, onComplete(Status::JwtUnknownIssuer));
 
   auto headers = Http::TestRequestHeaderMapImpl{};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   callbacks_["example_provider"](Status::JwtMissed);
   callbacks_["other_provider"](Status::JwtUnknownIssuer);

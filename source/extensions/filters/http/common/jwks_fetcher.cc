@@ -32,8 +32,9 @@ class JwksFetcherImpl : public JwksFetcher,
 public:
   JwksFetcherImpl(Upstream::ClusterManager& cm, const RemoteJwks& remote_jwks,
                   Event::Dispatcher& dispatcher)
-      : cm_(cm), uri_(remote_jwks.http_uri()), dispatcher_(dispatcher), num_retries_(RetryCount),
-        retries_remaining_(RetryCount) {
+      : cm_(cm), uri_(remote_jwks.http_uri()), dispatcher_(dispatcher),
+        backoff_timer_(dispatcher_.createTimer([this]() { fetchInternal(); })),
+        num_retries_(RetryCount), retries_remaining_(RetryCount) {
     ENVOY_LOG(trace, "{}", __func__);
 
     uint64_t base_interval_ms = RetryInitialDelayMilliseconds;
@@ -56,8 +57,6 @@ public:
 
     backoff_strategy_ = std::make_unique<Envoy::JitteredExponentialBackOffStrategy>(
         base_interval_ms, max_interval_ms, random_);
-
-    backoff_timer_ = dispatcher_.createTimer([this]() { fetchInternal(); });
 
     retries_remaining_ = num_retries_;
   }

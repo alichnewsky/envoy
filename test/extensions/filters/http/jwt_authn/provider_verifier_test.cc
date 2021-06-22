@@ -42,6 +42,11 @@ public:
                                  *filter_config_);
   }
 
+  void createContext(Http::RequestHeaderMap& headers) {
+    context_ =
+        Verifier::createContext(headers, parent_span_, &mock_cb_, mock_factory_ctx_.dispatcher());
+  }
+
   JwtAuthentication proto_config_;
   std::shared_ptr<FilterConfigImpl> filter_config_;
   VerifierConstPtr verifier_;
@@ -68,7 +73,7 @@ TEST_F(ProviderVerifierTest, TestOkJWT) {
       {"Authorization", "Bearer " + std::string(GoodToken)},
       {"sec-istio-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_EQ(ExpectedPayloadValue, headers.get_("sec-istio-auth-userinfo"));
 }
@@ -97,7 +102,7 @@ TEST_F(ProviderVerifierTest, TestSpanPassedDown) {
       {"Authorization", "Bearer " + std::string(GoodToken)},
       {"sec-istio-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
 }
 
@@ -108,7 +113,7 @@ TEST_F(ProviderVerifierTest, TestMissedJWT) {
   EXPECT_CALL(mock_cb_, onComplete(Status::JwtMissed));
 
   auto headers = Http::TestRequestHeaderMapImpl{{"sec-istio-auth-userinfo", ""}};
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_FALSE(headers.has("sec-istio-auth-userinfo"));
 }
@@ -147,7 +152,7 @@ rules:
       {"example-auth-userinfo", ""},
       {"other-auth-userinfo", ""},
   };
-  context_ = Verifier::createContext(headers, parent_span_, &mock_cb_);
+  createContext(headers);
   verifier_->verify(context_);
   EXPECT_TRUE(headers.has("example-auth-userinfo"));
   EXPECT_FALSE(headers.has("other-auth-userinfo"));
@@ -170,10 +175,12 @@ TEST_F(ProviderVerifierTest, TestRequiresProviderWithAudiences) {
 
   auto headers =
       Http::TestRequestHeaderMapImpl{{"Authorization", "Bearer " + std::string(GoodToken)}};
-  verifier_->verify(Verifier::createContext(headers, parent_span_, &mock_cb_));
+  createContext(headers);
+  verifier_->verify(context_);
   headers =
       Http::TestRequestHeaderMapImpl{{"Authorization", "Bearer " + std::string(InvalidAudToken)}};
-  verifier_->verify(Verifier::createContext(headers, parent_span_, &mock_cb_));
+  createContext(headers);
+  verifier_->verify(context_);
 }
 
 // This test verifies that requirement referencing nonexistent provider will throw exception

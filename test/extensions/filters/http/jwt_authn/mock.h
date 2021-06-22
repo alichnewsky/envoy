@@ -21,7 +21,7 @@ class MockAuthFactory : public AuthFactory {
 public:
   MOCK_METHOD(AuthenticatorPtr, create,
               (const ::google::jwt_verify::CheckAudience*, const absl::optional<std::string>&, bool,
-               bool),
+               bool, Event::Dispatcher& dispatcher),
               (const));
 };
 

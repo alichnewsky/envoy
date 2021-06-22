@@ -52,7 +52,7 @@ public:
         [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher&) {
           return std::move(fetcher_);
         },
-        filter_config_->dispatcher());
+        mock_factory_ctx_.dispatcher_);
     jwks_ = Jwks::createFrom(PublicKey, Jwks::JWKS);
     EXPECT_TRUE(jwks_->getStatus() == Status::Ok);
   }

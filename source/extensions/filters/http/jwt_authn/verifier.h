@@ -88,7 +88,7 @@ public:
 
   // Factory method for creating verifier contexts.
   static ContextSharedPtr createContext(Http::RequestHeaderMap& headers, Tracing::Span& parent_span,
-                                        Callbacks* callback);
+                                        Callbacks* callback, Event::Dispatcher& dispatcher);
 };
 
 using ContextSharedPtr = std::shared_ptr<Verifier::Context>;

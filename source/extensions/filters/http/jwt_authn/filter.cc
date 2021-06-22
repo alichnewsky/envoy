@@ -87,7 +87,8 @@ Http::FilterHeadersStatus Filter::decodeHeaders(Http::RequestHeaderMap& headers,
     onComplete(Status::Ok);
   } else {
     // Verify the JWT token, onComplete() will be called when completed.
-    context_ = Verifier::createContext(headers, decoder_callbacks_->activeSpan(), this);
+    context_ = Verifier::createContext(headers, decoder_callbacks_->activeSpan(), this,
+                                       decoder_callbacks_->dispatcher());
     verifier->verify(context_);
   }
 
