@@ -211,8 +211,8 @@ TEST_F(JwksFetcherRetryingTest, TestRetryOnceThenSucceed) {
 
       retry_policy:
         retry_back_off:
-          base_interval: 0.001s
-          max_interval: 0.1s
+          base_interval: 10s
+          max_interval: 120s
         num_retries: 3
    )";
 
@@ -286,8 +286,8 @@ TEST_F(JwksFetcherRetryingTest, TestExhaustAllRetriesAndStillFail) {
 
       retry_policy:
         retry_back_off:
-          base_interval: 0.001s
-          max_interval: 0.1s
+          base_interval: 10s
+          max_interval: 120s
         num_retries: 3
    )";
   // Setup
