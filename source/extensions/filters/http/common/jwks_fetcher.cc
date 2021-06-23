@@ -169,9 +169,10 @@ private:
   }
 
   void retryFetch(JwksFetcher::JwksReceiver::Failure reason) {
-    if (retries_remaining_-- > 0) {
+    if (retries_remaining_ > 0) {
+      --retries_remaining_;
       auto retry_ms = std::chrono::milliseconds(backoff_strategy_->nextBackOffMs());
-      ENVOY_LOG(info, "retrying after {} milliseconds backoff", retry_ms.count());
+      ENVOY_LOG(info, "retry #{} out of {} remaining {} retrying after {} milliseconds backoff", (num_retries_ - retries_remaining_), num_retries_, retries_remaining_, retry_ms.count());
       backoff_timer_->enableTimer(retry_ms);
     } else {
       ENVOY_LOG(warn, "not retrying anymore");
