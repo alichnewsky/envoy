@@ -274,8 +274,8 @@ class JwksAsyncFetcherRetryingTest : public testing::Test,
 public:
   JwksAsyncFetcherRetryingTest() : stats_(generateMockStats(context_.scope())) {}
 
-  void setupAsyncFetcher(const std::string& config_str, uint32_t numFailures = 0,
-                         uint32_t numSuccess = 1) {
+  void setupAsyncFetcher(const std::string& config_str, uint32_t num_failures = 0,
+                         uint32_t num_success = 1) {
     TestUtility::loadFromYaml(config_str, config_);
 
     EXPECT_TRUE(config_.has_async_fetch());
@@ -292,8 +292,8 @@ public:
     request_ = std::make_unique<Http::MockAsyncClientRequest>(
         &(context_.cluster_manager_.thread_local_cluster_.async_client_));
 
-    num_expected_failures_ = numFailures;
-    num_expected_successes_ = numSuccess;
+    num_expected_failures_ = num_failures;
+    num_expected_successes_ = num_success;
 
     if (num_expected_failures_ > 0 || num_expected_successes_ > 0) {
 
