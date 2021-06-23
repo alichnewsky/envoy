@@ -70,7 +70,7 @@ void JwksAsyncFetcher::handleFetchDone() {
 void JwksAsyncFetcher::onJwksSuccess(google::jwt_verify::JwksPtr&& jwks) {
   stats_.jwks_fetch_success_.inc();
 
-  ENVOY_LOG(warn, "{}: succeeded", debug_name_);
+  ENVOY_LOG(info, "{}: succeeded", debug_name_);
 
   done_fn_(std::move(jwks));
 
