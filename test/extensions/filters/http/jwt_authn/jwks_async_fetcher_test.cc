@@ -271,15 +271,12 @@ const std::string jwks_text = R"(
  )";
 
 class JwksAsyncFetcherRetryingTest : public testing::Test,
-                                     public Logger::Loggable<Logger::Id::filter>{
+                                     public Logger::Loggable<Logger::Id::filter> {
 public:
   JwksAsyncFetcherRetryingTest() : stats_(generateMockStats(context_.scope())) {}
 
-  ~JwksAsyncFetcherRetryingTest(){
-    ENVOY_LOG(trace, "{} destructor called", __func__);
-  }
-
-  void setupAsyncFetcher(const std::string& config_str, uint32_t numFailures=0, uint32_t numSuccess=1) {
+  void setupAsyncFetcher(const std::string& config_str, uint32_t numFailures = 0,
+                         uint32_t numSuccess = 1) {
     TestUtility::loadFromYaml(config_str, config_);
 
     EXPECT_TRUE(config_.has_async_fetch());
@@ -293,29 +290,28 @@ public:
     num_retries_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(config_.retry_policy(), num_retries, 1);
 
     context_.cluster_manager_.initializeThreadLocalClusters({"pubkey_cluster"});
-    request_ = std::make_unique<Http::MockAsyncClientRequest>( &(context_.cluster_manager_.thread_local_cluster_.async_client_));
+    request_ = std::make_unique<Http::MockAsyncClientRequest>(
+        &(context_.cluster_manager_.thread_local_cluster_.async_client_));
 
     num_expected_failures_ = numFailures;
     num_expected_successes_ = numSuccess;
 
-    if( num_expected_failures_ > 0 || num_expected_successes_ > 0 ){
+    if (num_expected_failures_ > 0 || num_expected_successes_ > 0) {
 
-      EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.async_client_,
-                  send_(_, _, _))
-          .WillRepeatedly(
-              Invoke([this](
-                         Http::RequestMessagePtr&, Http::AsyncClient::Callbacks& cb,
-                         const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
-
-                if ( num_expected_failures_ > num_internal_failures_ ){
+      EXPECT_CALL(context_.cluster_manager_.thread_local_cluster_.async_client_, send_(_, _, _))
+          .WillRepeatedly(Invoke(
+              [this](Http::RequestMessagePtr&, Http::AsyncClient::Callbacks& cb,
+                     const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
+                if (num_expected_failures_ > num_internal_failures_) {
                   ++num_internal_failures_;
                   cb.onFailure(*request_, Http::AsyncClient::FailureReason::Reset);
                   return request_.get();
 
-                } else if ( num_expected_successes_ > num_internal_successes_) {
+                } else if (num_expected_successes_ > num_internal_successes_) {
 
-                  Http::ResponseMessagePtr response_message(new Http::ResponseMessageImpl(
-                      Http::ResponseHeaderMapPtr{new Http::TestResponseHeaderMapImpl{{":status", "200"}}}));
+                  Http::ResponseMessagePtr response_message(
+                      new Http::ResponseMessageImpl(Http::ResponseHeaderMapPtr{
+                          new Http::TestResponseHeaderMapImpl{{":status", "200"}}}));
 
                   response_message->body().add(jwks_text);
                   ++num_internal_successes_;
@@ -329,36 +325,32 @@ public:
     }
 
     EXPECT_CALL(context_.dispatcher_, createTimer_(_))
-      .WillOnce(Invoke([this](Event::TimerCb timer_cb) {
-        refresh_cache_cb_ = timer_cb;
-        ENVOY_LOG(trace, "createTimer() : returning the async timer");
-        EXPECT_CALL(*timer_, enableTimer(_, _))
-            .WillOnce(Invoke([](){
-              ENVOY_LOG(trace,"ignoring cache refreshing callback with enableTimer()");
-            }));
-        return timer_;
-      }))
-      .WillRepeatedly(Invoke([this](Event::TimerCb timer_cb) {
-        retry_timer_cb_ = timer_cb;
-        ENVOY_LOG(trace, "createTimer() : returning the retry_timer_");
-        EXPECT_CALL(*retry_timer_, enableTimer(_, _)).WillRepeatedly(Invoke([this]() {
-          ENVOY_LOG(trace, "invoking retry callback with enableTimer()");
-          retry_timer_cb_();
+        .WillOnce(Invoke([this](Event::TimerCb timer_cb) {
+          refresh_cache_cb_ = timer_cb;
+          ENVOY_LOG(trace, "createTimer() : returning the async timer");
+          EXPECT_CALL(*timer_, enableTimer(_, _)).WillOnce(Invoke([]() {
+            ENVOY_LOG(trace, "ignoring cache refreshing callback with enableTimer()");
+          }));
+          return timer_;
+        }))
+        .WillRepeatedly(Invoke([this](Event::TimerCb timer_cb) {
+          retry_timer_cb_ = timer_cb;
+          ENVOY_LOG(trace, "createTimer() : returning the retry_timer_");
+          EXPECT_CALL(*retry_timer_, enableTimer(_, _)).WillRepeatedly(Invoke([this]() {
+            ENVOY_LOG(trace, "invoking retry callback with enableTimer()");
+            retry_timer_cb_();
+          }));
+          return retry_timer_;
         }));
-        return retry_timer_;
-      }));
-
 
     async_fetcher_ = std::make_unique<JwksAsyncFetcher>(
         config_, context_,
         [this](Upstream::ClusterManager&, const RemoteJwks&, Event::Dispatcher& dispatcher) {
-
           auto fetcher = JwksFetcher::create(context_.cluster_manager_, config_, dispatcher);
           return fetcher;
         },
         stats_,
         [this](google::jwt_verify::JwksPtr&& jwks) { out_jwks_array_.push_back(std::move(jwks)); });
-
   }
 
   RemoteJwks config_;
@@ -385,11 +377,9 @@ public:
   uint32_t num_internal_successes_{0u};
   uint32_t num_internal_failures_{0u};
   uint32_t num_unexpected_calls_{0u};
-
 };
 
-TEST_F(JwksAsyncFetcherRetryingTest, TestNetworkFailureFetchAndRetrySuccessfully)
-{
+TEST_F(JwksAsyncFetcherRetryingTest, TestNetworkFailureFetchAndRetrySuccessfully) {
   const char config[] = R"(
       http_uri:
         uri: https://pubkey_server/pubkey_path
@@ -431,7 +421,6 @@ TEST_F(JwksAsyncFetcherRetryingTest, TestNetworkFailureFetchAndRetryWithoutSucce
 
   // Just start the Jwks fetch call because there's a fast listener by default.
   setupAsyncFetcher(config, 4, 0);
-
 
   EXPECT_EQ(4U, num_internal_failures_);
   EXPECT_EQ(0U, num_internal_successes_);

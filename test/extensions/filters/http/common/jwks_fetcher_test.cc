@@ -53,8 +53,8 @@ public:
   void setupFetcher(const std::string& config_str) {
     TestUtility::loadFromYaml(config_str, remote_jwks_);
     mock_factory_ctx_.cluster_manager_.initializeThreadLocalClusters({"pubkey_cluster"});
-    fetcher_ = JwksFetcher::create(
-        mock_factory_ctx_.cluster_manager_, remote_jwks_, mock_factory_ctx_.dispatcher_);
+    fetcher_ = JwksFetcher::create(mock_factory_ctx_.cluster_manager_, remote_jwks_,
+                                   mock_factory_ctx_.dispatcher_);
     EXPECT_TRUE(fetcher_ != nullptr);
   }
 
@@ -77,7 +77,6 @@ public:
   testing::NiceMock<Server::Configuration::MockFactoryContext> mock_factory_ctx_;
   NiceMock<Tracing::MockSpan> parent_span_;
 };
-
 
 // Test findByIssuer
 TEST_F(JwksFetcherTest, TestGetSuccess) {
