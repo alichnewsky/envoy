@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 
 #include "envoy/config/core/v3/http_uri.pb.h"
 
@@ -41,6 +42,19 @@ private:
   Http::MockAsyncClientRequest request_;
   std::string status_;
   std::string response_body_;
+};
+
+class MockDelayedActionUpstream {
+public:
+  /**
+   * Mock upstream which saves the callback for the user to invoke explicitly.
+   */
+  MockDelayedActionUpstream(Upstream::MockClusterManager& mock_cm);
+
+  std::vector<Http::AsyncClient::Callbacks*> asyn_cb_vector_;
+
+private:
+  Http::MockAsyncClientRequest request_;
 };
 
 class MockJwksReceiver : public JwksFetcher::JwksReceiver {

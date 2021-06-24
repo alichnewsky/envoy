@@ -45,6 +45,18 @@ MockUpstream::MockUpstream(Upstream::MockClusterManager& mock_cm,
   ON_CALL(mock_cm.thread_local_cluster_.async_client_, send_(testing::_, testing::_, testing::_))
       .WillByDefault(testing::Return(request));
 }
+
+MockDelayedActionUpstream::MockDelayedActionUpstream(Upstream::MockClusterManager& mock_cm)
+    : request_(&mock_cm.thread_local_cluster_.async_client_) {
+  ON_CALL(mock_cm.thread_local_cluster_.async_client_, send_(testing::_, testing::_, testing::_))
+      .WillByDefault(testing::Invoke(
+          [this](Http::RequestMessagePtr&, Http::AsyncClient::Callbacks& cb,
+                 const Http::AsyncClient::RequestOptions&) -> Http::AsyncClient::Request* {
+            // delayed action. just push it to the vector. the user triggers it.
+            asyn_cb_vector_.push_back(&cb);
+            return &request_;
+          }));
+}
 } // namespace Common
 } // namespace HttpFilters
 } // namespace Extensions
