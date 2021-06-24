@@ -64,20 +64,6 @@ public:
   NiceMock<Tracing::MockSpan> parent_span_;
 };
 
-// use this class if the JwksFetcher dispatcher cannot be safely mocked.
-// for now, that means the backoff timer will be used.
-class JwksFetcherRetryingTest : public testing::Test {
-public:
-  void setupFetcher(const std::string& config_str) {
-    TestUtility::loadFromYaml(config_str, remote_jwks_);
-    mock_factory_ctx_.cluster_manager_.initializeThreadLocalClusters({"pubkey_cluster"});
-  }
-
-  RemoteJwks remote_jwks_;
-  testing::NiceMock<Server::Configuration::MockFactoryContext> mock_factory_ctx_;
-  NiceMock<Tracing::MockSpan> parent_span_;
-};
-
 // Test findByIssuer
 TEST_F(JwksFetcherTest, TestGetSuccess) {
   // Setup
@@ -178,6 +164,20 @@ TEST_F(JwksFetcherTest, TestSpanPassedDown) {
   // Act
   fetcher_->fetch(parent_span_, receiver);
 }
+
+// use this class if the JwksFetcher dispatcher cannot be safely mocked.
+// for now, that means the backoff timer will be used.
+class JwksFetcherRetryingTest : public testing::Test {
+public:
+  void setupFetcher(const std::string& config_str) {
+    TestUtility::loadFromYaml(config_str, remote_jwks_);
+    mock_factory_ctx_.cluster_manager_.initializeThreadLocalClusters({"pubkey_cluster"});
+  }
+
+  RemoteJwks remote_jwks_;
+  testing::NiceMock<Server::Configuration::MockFactoryContext> mock_factory_ctx_;
+  NiceMock<Tracing::MockSpan> parent_span_;
+};
 
 TEST_F(JwksFetcherRetryingTest, TestRetryOnceThenSucceed) {
   const char retry[] = R"(
@@ -280,16 +280,15 @@ TEST_F(JwksFetcherRetryingTest, TestExhaustAllRetriesAndStillFail) {
   fetcher->fetch(parent_span_, receiver);
 
   EXPECT_EQ(mock_pubkey.asyn_cb_vector_.size(), 1);
-  // this does not use the same request as the mock...
   mock_pubkey.asyn_cb_vector_[0]->onFailure(request, Http::AsyncClient::FailureReason::Reset);
   EXPECT_EQ(mock_pubkey.asyn_cb_vector_.size(), 2);
-  // this does not use the same request as the mock...
+
   mock_pubkey.asyn_cb_vector_[1]->onFailure(request, Http::AsyncClient::FailureReason::Reset);
   EXPECT_EQ(mock_pubkey.asyn_cb_vector_.size(), 3);
-  // this does not use the same request as the mock...
+
   mock_pubkey.asyn_cb_vector_[2]->onFailure(request, Http::AsyncClient::FailureReason::Reset);
   EXPECT_EQ(mock_pubkey.asyn_cb_vector_.size(), 4);
-  // this does not use the same request as the mock...
+
   mock_pubkey.asyn_cb_vector_[3]->onFailure(request, Http::AsyncClient::FailureReason::Reset);
 }
 } // namespace
